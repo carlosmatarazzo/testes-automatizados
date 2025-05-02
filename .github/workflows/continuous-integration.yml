@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-java@v2
         with:
           java-version: '22'
-          distribution: 'adopt'
+          distribution: 'temurin'
 
       - name: Build and test
         run: mvn clean test

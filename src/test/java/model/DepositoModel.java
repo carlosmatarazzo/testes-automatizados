@@ -1,8 +1,7 @@
 package model;
+
 import com.google.gson.annotations.Expose;
 import lombok.Data;
-
-import java.util.Date;
 
 @Data
 public class DepositoModel {

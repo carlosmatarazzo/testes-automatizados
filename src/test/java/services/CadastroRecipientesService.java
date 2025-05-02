@@ -1,4 +1,3 @@
-
 package services;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -9,6 +8,7 @@ import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
+import context.WorldContext;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import model.RecipienteModel;
@@ -25,33 +25,27 @@ import static io.restassured.RestAssured.given;
 
 public class CadastroRecipientesService {
 
-    final RecipienteModel recipienteModel = new RecipienteModel();
-    public final Gson gson = new GsonBuilder()
-            .excludeFieldsWithoutExposeAnnotation()
-            .create();
+    private final RecipienteModel recipienteModel = new RecipienteModel();
+    public final Gson gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
     public Response response;
-    String baseUrl = "http://localhost:8080/api";
-    String recipienteId;
-    String schemasPath = "src/test/resources/schemas/";
-    JSONObject jsonSchema;
+    private final String baseUrl = "http://localhost:8080/api";
+    private String recipienteId;
+    private final String schemasPath = "src/test/resources/schemas/";
+    private JSONObject jsonSchema;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public void setFieldsRecipiente(String field, String value) {
         switch (field) {
-            //case "" -> recipienteModel.set(Integer.parseInt(value));
             case "tipo" -> recipienteModel.setTipo(value);
             case "capacidadeTotal" -> recipienteModel.setCapacidadeTotal(Integer.parseInt(value));
             case "localizacao" -> recipienteModel.setLocalizacao(value);
-            default -> throw new IllegalStateException("Unexpected feld" + field);
+            default -> throw new IllegalStateException("Campo inesperado: " + field);
         }
     }
 
     public void createRecipiente(String endPoint) {
         String url = baseUrl + endPoint;
         String bodyToSend = gson.toJson(recipienteModel);
-
-        System.out.println("Enviando para: " + url);
-        System.out.println("Payload: " + bodyToSend);
 
         response = given()
                 .contentType(ContentType.JSON)
@@ -66,7 +60,6 @@ public class CadastroRecipientesService {
 
     public void retrieveRecipienteId() {
         recipienteId = String.valueOf(gson.fromJson(response.jsonPath().prettify(), RecipienteModel.class).getRecipienteId());
-        System.out.println("Recipiente ID capturado: " + recipienteId);
     }
 
     public String getRecipienteId() {
@@ -74,9 +67,10 @@ public class CadastroRecipientesService {
     }
 
     public void deleteRecipiente(String endPoint) {
-        String url = String.format("%s%s/%s", baseUrl, endPoint, recipienteId);
+        String id = WorldContext.recipienteId; // <-- use ID global, não o this.recipienteId
+        String url = String.format("%s%s/%s", baseUrl, endPoint, id);
 
-        System.out.println("Enviando para: " + url);
+        System.out.println(">>> Enviando DELETE para: " + url);
 
         response = given()
                 .accept(ContentType.JSON)
@@ -97,26 +91,15 @@ public class CadastroRecipientesService {
     public void setContract(String contract) throws IOException {
         switch (contract) {
             case "Cadastro bem-sucedido de recipiente" -> jsonSchema = loadJsonFromFile(schemasPath + "cadastro-bem-sucedido-de-recipiente.json");
-            default -> throw new IllegalStateException("Unexpected contract" + contract);
+            default -> throw new IllegalStateException("Contrato inesperado: " + contract);
         }
     }
 
     public Set<ValidationMessage> validateResponseAgainstSchema() throws IOException {
-
-        // Obter o corpo da resposta como String e converter para JSONObject
         JSONObject jsonResponse = new JSONObject(response.getBody().asString());
-
-        // Configurar o JsonSchemaFactory e criar o JsonSchema
         JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V4);
         JsonSchema schema = schemaFactory.getSchema(jsonSchema.toString());
-
-        // Converter o JSON de resposta para JsonNode
         JsonNode jsonResponseNode = mapper.readTree(jsonResponse.toString());
-
-        // Validar o JSON de resposta contra o esquema
-        Set<ValidationMessage> schemaValidationErrors = schema.validate(jsonResponseNode);
-
-        return schemaValidationErrors;
-
+        return schema.validate(jsonResponseNode);
     }
 }

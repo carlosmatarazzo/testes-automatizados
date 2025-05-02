@@ -6,8 +6,7 @@ import io.cucumber.junit.CucumberOptions;
 @RunWith(Cucumber.class)
 @CucumberOptions(
         features = "src/test/resources/features",
-        glue =  {"steps", "hook"}, // Inclua o pacote de hooks aqui
-        //tags = "@padrão",
+        glue =  {"steps", "hook"},
         plugin = {"html:target/cucumber-reports.html"}
 )
 public class TestRunner {

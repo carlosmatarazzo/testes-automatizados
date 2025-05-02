@@ -1,4 +1,3 @@
-
 package services;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -9,6 +8,7 @@ import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
+import context.WorldContext;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import model.ColetaModel;
@@ -25,31 +25,25 @@ import static io.restassured.RestAssured.given;
 
 public class CadastroColetasService {
 
-    final ColetaModel coletaModel = new ColetaModel();
-    public final Gson gson = new GsonBuilder()
-            .excludeFieldsWithoutExposeAnnotation()
-            .create();
+    private final ColetaModel coletaModel = new ColetaModel();
+    public final Gson gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
     public Response response;
-    String baseUrl = "http://localhost:8080/api";
-    String coletaId;
-    String schemasPath = "src/test/resources/schemas/";
-    JSONObject jsonSchema;
+    private final String baseUrl = "http://localhost:8080/api";
+    private final String schemasPath = "src/test/resources/schemas/";
+    private JSONObject jsonSchema;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public void setFieldsColeta(String field, String value) {
         switch (field) {
             case "recipienteId" -> coletaModel.setRecipienteId(value);
             case "data" -> coletaModel.setData(value);
-            default -> throw new IllegalStateException("Unexpected feld" + field);
+            default -> throw new IllegalStateException("Campo inesperado: " + field);
         }
     }
 
     public void createColeta(String endPoint) {
         String url = baseUrl + endPoint;
         String bodyToSend = gson.toJson(coletaModel);
-
-        System.out.println("Enviando para: " + url);
-        System.out.println("Payload: " + bodyToSend);
 
         response = given()
                 .contentType(ContentType.JSON)
@@ -63,19 +57,15 @@ public class CadastroColetasService {
     }
 
     public void retrieveColetaId() {
-        coletaId = String.valueOf(
-                gson.fromJson(response.jsonPath().prettify(), ColetaModel.class).getColetaId()
-        );
-        System.out.println("Depósito ID capturado: " + coletaId);
+        int id = gson.fromJson(response.jsonPath().prettify(), ColetaModel.class).getColetaId();
+        WorldContext.coletaId = String.valueOf(id);
     }
 
-    public String getColetaId() {
-        return this.coletaId;
-    }
     public void deleteColeta(String endPoint) {
-        String url = String.format("%s%s/%s", baseUrl, endPoint, coletaId);
+        String id = WorldContext.coletaId;
+        String url = String.format("%s%s/%s", baseUrl, endPoint, id);
 
-        System.out.println("Enviando para: " + url);
+        System.out.println(">>> Enviando DELETE para: " + url);
 
         response = given()
                 .accept(ContentType.JSON)
@@ -86,6 +76,14 @@ public class CadastroColetasService {
                 .response();
     }
 
+    public void setContract(String contract) throws IOException {
+        switch (contract) {
+            case "Cadastro bem-sucedido de coleta" ->
+                    jsonSchema = loadJsonFromFile(schemasPath + "cadastro-bem-sucedido-de-coleta.json");
+            default -> throw new IllegalStateException("Contrato inesperado: " + contract);
+        }
+    }
+
     private JSONObject loadJsonFromFile(String filePath) throws IOException {
         try (InputStream inputStream = Files.newInputStream(Paths.get(filePath))) {
             JSONTokener tokener = new JSONTokener(inputStream);
@@ -93,23 +91,11 @@ public class CadastroColetasService {
         }
     }
 
-    public void setContract(String contract) throws IOException {
-        switch (contract) {
-            case "Cadastro bem-sucedido de coleta" ->
-                    jsonSchema = loadJsonFromFile(schemasPath + "cadastro-bem-sucedido-de-coleta.json");
-            default ->
-                    throw new IllegalStateException("Contrato não esperado: " + contract);
-        }
-    }
-
     public Set<ValidationMessage> validateResponseAgainstSchema() throws IOException {
         JSONObject jsonResponse = new JSONObject(response.getBody().asString());
-
         JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V4);
         JsonSchema schema = schemaFactory.getSchema(jsonSchema.toString());
-
         JsonNode jsonResponseNode = mapper.readTree(jsonResponse.toString());
-
         return schema.validate(jsonResponseNode);
     }
 }

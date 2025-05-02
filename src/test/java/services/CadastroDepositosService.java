@@ -1,4 +1,3 @@
-
 package services;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -12,6 +11,7 @@ import com.networknt.schema.ValidationMessage;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import model.DepositoModel;
+import context.WorldContext;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
@@ -25,15 +25,12 @@ import static io.restassured.RestAssured.given;
 
 public class CadastroDepositosService {
 
-    final DepositoModel depositoModel = new DepositoModel();
-    public final Gson gson = new GsonBuilder()
-            .excludeFieldsWithoutExposeAnnotation()
-            .create();
+    private final DepositoModel depositoModel = new DepositoModel();
+    public final Gson gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
     public Response response;
-    String baseUrl = "http://localhost:8080/api";
-    String depositoId;
-    String schemasPath = "src/test/resources/schemas/";
-    JSONObject jsonSchema;
+    private final String baseUrl = "http://localhost:8080/api";
+    private final String schemasPath = "src/test/resources/schemas/";
+    private JSONObject jsonSchema;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public void setFieldsDeposito(String field, String value) {
@@ -41,16 +38,13 @@ public class CadastroDepositosService {
             case "recipienteId" -> depositoModel.setRecipienteId(value);
             case "peso" -> depositoModel.setPeso(Integer.parseInt(value));
             case "data" -> depositoModel.setData(value);
-            default -> throw new IllegalStateException("Unexpected feld" + field);
+            default -> throw new IllegalStateException("Campo inesperado: " + field);
         }
     }
 
     public void createDeposito(String endPoint) {
         String url = baseUrl + endPoint;
         String bodyToSend = gson.toJson(depositoModel);
-
-        System.out.println("Enviando para: " + url);
-        System.out.println("Payload: " + bodyToSend);
 
         response = given()
                 .contentType(ContentType.JSON)
@@ -64,19 +58,19 @@ public class CadastroDepositosService {
     }
 
     public void retrieveDepositoId() {
-        depositoId = String.valueOf(
-                gson.fromJson(response.jsonPath().prettify(), model.DepositoModel.class).getDepositoId()
-        );
-        System.out.println("Depósito ID capturado: " + depositoId);
+        int id = gson.fromJson(response.jsonPath().prettify(), DepositoModel.class).getDepositoId();
+        WorldContext.depositoId = String.valueOf(id);
     }
 
     public String getDepositoId() {
-        return this.depositoId;
+        return WorldContext.depositoId;
     }
-    public void deleteDeposito(String endPoint) {
-        String url = String.format("%s%s/%s", baseUrl, endPoint, depositoId);
 
-        System.out.println("Enviando para: " + url);
+    public void deleteDeposito(String endPoint) {
+        String id = WorldContext.depositoId;
+        String url = String.format("%s%s/%s", baseUrl, endPoint, id);
+
+        System.out.println(">>> Enviando DELETE para: " + url);
 
         response = given()
                 .accept(ContentType.JSON)
@@ -87,6 +81,14 @@ public class CadastroDepositosService {
                 .response();
     }
 
+    public void setContract(String contract) throws IOException {
+        switch (contract) {
+            case "Cadastro bem-sucedido de deposito" ->
+                    jsonSchema = loadJsonFromFile(schemasPath + "cadastro-bem-sucedido-de-deposito.json");
+            default -> throw new IllegalStateException("Contrato inesperado: " + contract);
+        }
+    }
+
     private JSONObject loadJsonFromFile(String filePath) throws IOException {
         try (InputStream inputStream = Files.newInputStream(Paths.get(filePath))) {
             JSONTokener tokener = new JSONTokener(inputStream);
@@ -94,23 +96,11 @@ public class CadastroDepositosService {
         }
     }
 
-    public void setContract(String contract) throws IOException {
-        switch (contract) {
-            case "Cadastro bem-sucedido de deposito" ->
-                    jsonSchema = loadJsonFromFile(schemasPath + "cadastro-bem-sucedido-de-deposito.json");
-            default ->
-                    throw new IllegalStateException("Contrato não esperado: " + contract);
-        }
-    }
-
     public Set<ValidationMessage> validateResponseAgainstSchema() throws IOException {
         JSONObject jsonResponse = new JSONObject(response.getBody().asString());
-
         JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V4);
         JsonSchema schema = schemaFactory.getSchema(jsonSchema.toString());
-
         JsonNode jsonResponseNode = mapper.readTree(jsonResponse.toString());
-
         return schema.validate(jsonResponseNode);
     }
 }
